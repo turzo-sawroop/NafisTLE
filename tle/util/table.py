@@ -31,10 +31,11 @@ class Line:
         return style.format_line(self.c)
 
 class Style:
-    def __init__(self, body, header=None):
+    def __init__(self, body, header=None, widths=None):
         self._body = body
         self._header = header or body
         self.ncols = body.count('}')
+        self.widths = widths or [None]*self.ncols
 
     def _pad(self, data, fmt):
         S = []
@@ -54,15 +55,23 @@ class Style:
             lastc = c
         return ''.join(S)
 
+    def _trunc(self, data):
+        def ellipsify(s, w):
+            if not w or type(s) != str or len(s) <= w:
+                return s
+            return s[:w - 1] + '…'
+        return [ellipsify(s, w) for s, w in zip(data, self.widths)]
+
     def format_header(self, data):
-        return self._pad(data, self._header).format(*data)
+        return self._pad(data, self._header).format(*self._trunc(data))
 
     def format_line(self, c):
         data = ['']*self.ncols
-        return self._pad(data, self._header).replace(':', ':'+c).format(*data)
+        return self._pad(data, self._header).replace(
+            ':', ':' + c).format(*self._trunc(data))
 
     def format_body(self, data):
-        return self._pad(data, self._body).format(*data)
+        return self._pad(data, self._body).format(*self._trunc(data))
 
     def set_colwidths(self, sizes):
         self.sizes = sizes
@@ -80,6 +89,7 @@ class Table:
     def __repr__(self):
         sizes = [row.sizes() for row in self.rows if isinstance(row, Content)]
         max_colsize = [max(s[i] for s in sizes) for i in range(self.style.ncols)]
-        self.style.set_colwidths(max_colsize)
+        colwidths = [w or mx for w, mx in zip(self.style.widths, max_colsize)]
+        self.style.set_colwidths(colwidths)
         return '\n'.join(row.layout(self.style) for row in self.rows)
     __str__ = __repr__
